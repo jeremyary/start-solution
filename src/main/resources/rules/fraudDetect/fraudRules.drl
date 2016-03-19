@@ -1,0 +1,102 @@
+package rules.fraudDetect;
+
+import com.signifyd.challenge.model.ActivityRecord;
+import com.signifyd.challenge.model.ActivityType;
+import com.signifyd.challenge.model.HistoryType;
+import com.signifyd.challenge.model.AccountHistory;
+import com.signifyd.challenge.model.PurchaseEvent;
+
+import java.util.List;
+import org.joda.time. DateTime;
+import org.apache.commons.csv.CSVRecord;
+
+rule "convert inbound CSV entries to ActivityRecords"
+when
+    $record : CSVRecord (  )
+then
+    insert ( new ActivityRecord($record) );
+    retract ( $record );
+end
+
+rule "add accountHistory for activityRecords with new accounts"
+when
+    $activity : ActivityRecord( $email : email )
+    not AccountHistory( accountEmail == $email )
+then
+    AccountHistory historyEntry = new AccountHistory($email);
+    historyEntry.getHistory().add($activity);
+    retract ( $activity );
+    insert ( historyEntry );
+    if ($activity.getActivityType().equals(ActivityType.PURCHASE)) {
+        insert ( new PurchaseEvent($activity) );
+    }
+end
+
+rule "add activityRecord to already know accounts"
+when
+    $activity : ActivityRecord( $email : email )
+    $history : AccountHistory( accountEmail == $email )
+then
+    $history.getHistory().add($activity);
+    retract ( $activity );
+    update ( $history );
+    if ($activity.getActivityType().equals(ActivityType.PURCHASE)) {
+        insert ( new PurchaseEvent($activity) );
+    }
+end
+
+rule "process initial purchase events"
+when
+    $purchase : PurchaseEvent( $email : record.email )
+    $account : AccountHistory( accountEmail == $email, $history : history, history.size() == 1)
+    not ActivityRecord( activityType == ActivityType.FRAUD_REPORT ) from $history
+then
+    ActivityRecord record = $account.getHistory().get(0);
+    System.out.println(record.getActivityTime() + "," + record.getEmail() + "," + HistoryType.NO_HISTORY.name());
+    retract ( $purchase );
+end
+
+rule "process purchases on fraudulent account"
+when
+    $purchase : PurchaseEvent( $email : record.email )
+    $account : AccountHistory( accountEmail == $email, $history : history )
+    ActivityRecord( activityType == ActivityType.FRAUD_REPORT ) from $history
+    $fraudList : List () from collect ( ActivityRecord( activityType == ActivityType.FRAUD_REPORT ) from $history )
+then
+    ActivityRecord record = $account.getHistory().get(0);
+    System.out.println(record.getActivityTime() + "," + record.getEmail() + ","
+    + HistoryType.FRAUD_HISTORY.name() + ":" + $fraudList.size());
+    retract ( $purchase );
+end
+
+rule "process purchases on unconfirmed account"
+when
+    $purchase : PurchaseEvent( $email : record.email )
+    $account : AccountHistory( accountEmail == $email, $history : history )
+    not ActivityRecord ( activityType == ActivityType.FRAUD_REPORT ) from $history
+    not ActivityRecord ( activityType == ActivityType.PURCHASE, activityTime.isBefore($purchase.record.activityTime.minusDays(90)) ) from $history
+    $purchaseList : List () from collect ( ActivityRecord( activityType == ActivityType.PURCHASE ) from $history )
+then
+    ActivityRecord record = $account.getHistory().get(0);
+    System.out.println(record.getActivityTime() + "," + record.getEmail() + ","
+    + HistoryType.UNCONFIRMED_HISTORY.name() + ":" + ($purchaseList.size() - 1));
+    retract ( $purchase );
+end
+
+rule "process purchases on confirmed account"
+when
+    $purchase : PurchaseEvent( $email : record.email )
+    $account : AccountHistory( accountEmail == $email, $history : history )
+    not ActivityRecord ( activityType == ActivityType.FRAUD_REPORT ) from $history
+    ActivityRecord ( activityType == ActivityType.PURCHASE, activityTime.isBefore($purchase.record.activityTime.minusDays(90)) ) from $history
+    $purchaseList : List () from collect ( ActivityRecord( activityType == ActivityType.PURCHASE ) from $history )
+then
+    ActivityRecord record = $account.getHistory().get(0);
+    System.out.println(record.getActivityTime() + "," + record.getEmail() + ","
+    + HistoryType.GOOD_HISTORY.name() + ":" + ($purchaseList.size() - 1));
+    retract ( $purchase );
+end
+
+
+
+
