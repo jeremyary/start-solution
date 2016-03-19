@@ -3,9 +3,9 @@ package com.signifyd.challenge.model;
 import org.apache.commons.csv.CSVRecord;
 import org.joda.time.DateTime;
 
-import java.time.LocalDate;
-
 /***
+ * stores the email, activityType, and activityTime of a transaction for historical record
+ *
  * @author jary
  * @since Mar/11/2016
  */
@@ -21,6 +21,12 @@ public class ActivityRecord {
         this.email = record.get(1);
         this.activityType = ActivityType.valueOf(record.get(2));
         this.activityTime = new DateTime(record.get(0));
+    }
+
+    public ActivityRecord(String email, ActivityType activityType, DateTime activityTime) {
+        this.email = email;
+        this.activityType = activityType;
+        this.activityTime = activityTime;
     }
 
     public String getEmail() {

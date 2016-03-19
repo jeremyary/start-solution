@@ -5,7 +5,7 @@ import org.junit.Test;
 public class SolutionTest {
 
     @Test
-    public void testSampleInput() {
+    public void testRunChallenge() {
 
         try {
             Solution.main(new String[]{"test"});

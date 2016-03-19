@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /***
+ * store {@link ActivityRecord} for known email address as they enter system
+ *
  * @author jary
  * @since Mar/11/2016
  */
